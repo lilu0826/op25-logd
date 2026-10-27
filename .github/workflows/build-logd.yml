@@ -1,0 +1,64 @@
+name: Build OpenWrt 25.12.6 logd without kernel logging
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-logd.yml'
+      - 'scripts/**'
+      - 'patches/**'
+      - 'README.md'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install build and inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib \
+            gettext git libncurses-dev libssl-dev python3 python3-pyelftools \
+            rsync unzip zlib1g-dev file wget curl zstd patch strace util-linux
+      - name: Build with the pinned official SDK
+        run: |
+          mkdir -p logs
+          set -o pipefail
+          bash scripts/build.sh 2>&1 | tee logs/build.log
+      - name: Test with the unchanged official OpenWrt rootfs
+        run: |
+          set -o pipefail
+          sudo env LOGD_TEST_HOST_PID_NS="$(readlink /proc/self/ns/pid)" \
+            unshare --mount --pid --fork --net --mount-proc \
+            bash scripts/test-isolated.sh 2>&1 | tee logs/runtime.log
+      - name: Package verified binary and evidence
+        run: |
+          test -f logs/runtime-PASS
+          mkdir -p dist
+          cp work/logd dist/logd
+          cp patches/100-logd-disable-kernel-log.patch dist/
+          cp README.md dist/
+          cp logs/static-check.json logs/loader-check.txt logs/runtime.log dist/
+          cp work/provenance.json dist/
+          tar -czf dist/source-and-build-recipe.tar.gz \
+            patches scripts .github/workflows/build-logd.yml \
+            work/source/ubox-2025.10.30~6f78fa49.tar.zst \
+            work/source/ubox-package-original
+          (cd dist && sha256sum logd *.patch *.json *.txt *.log *.gz README.md > SHA256SUMS)
+      - name: Upload verified deliverables
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: logd-no-kmsg-openwrt-25.12.6-x86_64
+          path: dist/
+          if-no-files-found: error
+      - name: Upload diagnostic logs even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: build-and-test-logs
+          path: logs/
+          if-no-files-found: warn

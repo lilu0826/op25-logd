@@ -1,0 +1,29 @@
+--- a/log/syslog.c
++++ b/log/syslog.c
+@@ -271,7 +271,7 @@
+ 	.stream.notify_read = klog_cb,
+ };
+ 
+-static int
++static int __attribute__((unused))
+ klog_open(void)
+ {
+ 	int fd;
+@@ -385,7 +385,7 @@
+ 		udebug_ubus_ring_init(&ud, &rings[i]);
+ 
+ 	syslog_open();
+-	klog_open();
++	/* Kernel log collection is disabled in this LXC build. */
+ 	openlog("sysinit", LOG_CONS, LOG_DAEMON);
+ }
+ 
+@@ -397,8 +397,6 @@
+ 		close(syslog_fd.fd);
+ 	}
+ 
+-	ustream_free(&klog.stream);
+-	close(klog.fd.fd);
+ 	free(log);
+ 	regfree(&pat_prio);
+ 	regfree(&pat_tstamp);

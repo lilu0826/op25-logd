@@ -1,0 +1,9 @@
+/source/
+/downloads/
+/evidence/
+/.tools/
+/work/
+/dist/
+/logs/
+__pycache__/
+*.zip
